@@ -52,6 +52,7 @@
 #include <sys/sysmacros.h>
 #include <sys/resource.h>
 #include <limits.h>
+#include <stdint.h>
 
 #ifndef	NOPERFEVENT
 #include <linux/perf_event.h>
@@ -93,8 +94,26 @@ enum {
 };
 
 static int	perfevents = PERF_EVENTS_AUTO;
+
+struct perf_group_read {
+	uint64_t	nr;
+	uint64_t	time_enabled;
+	uint64_t	time_running;
+	uint64_t	value[2];
+};
+
+struct perf_cpu_events {
+	int		instr_fd;
+	int		cycle_fd;
+	struct perf_group_read prev;
+	count_t		instr;
+	count_t		cycle;
+};
+
 static long	perf_event_open(struct perf_event_attr *, pid_t,
                 int, int, unsigned long);
+static void	add_perf_count(count_t *, count_t);
+static void	add_scaled_perf_count(count_t *, uint64_t, uint64_t, uint64_t);
 static void	getperfevents(struct cpustat *, count_t);
 #endif
 
@@ -2917,12 +2936,46 @@ perf_event_open(struct perf_event_attr *hwevent, pid_t pid,
 }
 
 static void
+add_perf_count(count_t *total, count_t count)
+{
+	if (count > LLONG_MAX - *total)
+		*total = LLONG_MAX;
+	else
+		*total += count;
+}
+
+static void
+add_scaled_perf_count(count_t *total, uint64_t count,
+		      uint64_t enabled, uint64_t running)
+{
+#if defined(__SIZEOF_INT128__)
+	__uint128_t scaled;
+#else
+	long double scaled;
+#endif
+
+	if (!running)
+		return;
+
+#if defined(__SIZEOF_INT128__)
+	scaled = (__uint128_t)count * enabled / running;
+#else
+	scaled = (long double)count * enabled / running;
+#endif
+
+	if (scaled > LLONG_MAX)
+		*total = LLONG_MAX;
+	else
+		add_perf_count(total, (count_t)scaled);
+}
+
+static void
 getperfevents(struct cpustat *cs, count_t onliners)
 {
-	static int	cpualloced, prev_nrcpu, *fdi, *fdc;
+	static int	cpualloced, prev_nrcpu;
+	static struct perf_cpu_events *events;
 	static count_t	prev_onliners;
 	int		i;
-	int 		liResult;
 
 	/*
 	** irrecoverable failure?
@@ -2956,18 +3009,17 @@ getperfevents(struct cpustat *cs, count_t onliners)
 
 			for (i=0; i < cpualloced; i++)
 			{
-				if ( *(fdi+i) )		// in use?
-					close( *(fdi+i) );
+				if (events[i].instr_fd >= 0)
+					close(events[i].instr_fd);
 
-				if ( *(fdc+i) )		// in use?
-					close( *(fdc+i) );
+				if (events[i].cycle_fd >= 0)
+					close(events[i].cycle_fd);
 			}
 
 			if (! droprootprivs())
 				mcleanstop(42, "failed to drop root privs\n");
 
-			free(fdi);
-			free(fdc);
+			free(events);
 		}
 	
 		/* for perf events two file descriptors will
@@ -2989,8 +3041,11 @@ getperfevents(struct cpustat *cs, count_t onliners)
 		prev_nrcpu    = cs->nrcpu;
 
 		cpualloced    = cs->maxcpu;
-		fdi           = calloc(cpualloced, sizeof(int));
-		fdc           = calloc(cpualloced, sizeof(int));
+		events        = calloc(cpualloced, sizeof(*events));
+		ptrverify(events, "Malloc failed for perf events\n");
+
+		for (i=0; i < cpualloced; i++)
+			events[i].instr_fd = events[i].cycle_fd = -1;
 
 		/*
 		** fill perf_event_attr struct with appropriate values
@@ -3000,7 +3055,9 @@ getperfevents(struct cpustat *cs, count_t onliners)
 		pea.type    = PERF_TYPE_HARDWARE;
 		pea.size    = sizeof(struct perf_event_attr);
 		pea.inherit = 1;
-		pea.pinned  = 1;
+		pea.read_format = PERF_FORMAT_GROUP |
+		                  PERF_FORMAT_TOTAL_TIME_ENABLED |
+		                  PERF_FORMAT_TOTAL_TIME_RUNNING;
 
 	 	regainrootprivs();
 
@@ -3009,17 +3066,41 @@ getperfevents(struct cpustat *cs, count_t onliners)
 			if (!cs->cpu[i].online)
 				continue;
 
+			/*
+			** Keep instructions and cycles on the same time slice so
+			** IPC remains meaningful while allowing the group to be
+			** multiplexed with other perf event users.
+			*/
+			pea.disabled = 1;
 			pea.config = PERF_COUNT_HW_INSTRUCTIONS;
 
-			if ( (*(fdi+i) = perf_event_open(&pea, -1, i, -1,
- 						PERF_FLAG_FD_CLOEXEC)) >= 0)
-				success++;
+			events[i].instr_fd = perf_event_open(&pea, -1, i, -1,
+							PERF_FLAG_FD_CLOEXEC);
 
+			if (events[i].instr_fd < 0)
+				continue;
+
+			pea.disabled = 0;
 			pea.config = PERF_COUNT_HW_CPU_CYCLES;
 
-			if ( (*(fdc+i) = perf_event_open(&pea, -1, i, -1,
-						PERF_FLAG_FD_CLOEXEC)) >= 0)
-				success++;
+			events[i].cycle_fd = perf_event_open(&pea, -1, i,
+							events[i].instr_fd,
+							PERF_FLAG_FD_CLOEXEC);
+
+			if (events[i].cycle_fd < 0 ||
+			    ioctl(events[i].instr_fd, PERF_EVENT_IOC_ENABLE,
+			          PERF_IOC_FLAG_GROUP) < 0)
+			{
+				if (events[i].cycle_fd >= 0)
+					close(events[i].cycle_fd);
+
+				close(events[i].instr_fd);
+				events[i].instr_fd = -1;
+				events[i].cycle_fd = -1;
+				continue;
+			}
+
+			success++;
 		}
 
 		if (! droprootprivs())
@@ -3030,8 +3111,8 @@ getperfevents(struct cpustat *cs, count_t onliners)
 		*/
 		if (success == 0)	
 		{
-			free(fdi);
-			free(fdc);
+			free(events);
+			events = NULL;
 			cpualloced = -1;	// irrecoverable failure
 		}
 		else
@@ -3046,8 +3127,8 @@ getperfevents(struct cpustat *cs, count_t onliners)
 	/*
 	** every sample: check if counters available anyhow
 	*/
-        if (cpualloced <= 0)
-                return;
+	if (cpualloced <= 0)
+		return;
 
 	/*
    	** retrieve counters per CPU and in total
@@ -3060,39 +3141,35 @@ getperfevents(struct cpustat *cs, count_t onliners)
 		if (!cs->cpu[i].online)
 			continue;
 
-		if (*(fdi+i) != -1)
+		if (events[i].instr_fd >= 0)
 		{
-                	liResult = read(*(fdi+i), &(cs->cpu[i].instr), sizeof(count_t));
+			struct perf_group_read value;
+			ssize_t size;
+			uint64_t enabled, running;
 
-			if(liResult < 0)
-			{
-				char lcMessage[64];
+			size = read(events[i].instr_fd, &value, sizeof(value));
 
-				snprintf(lcMessage, sizeof(lcMessage) - 1,
-				          "%s:%d - Error %d reading instr counters\n",
-				           __FILE__, __LINE__, errno);
-				fprintf(stderr, "%s", lcMessage);
-			}
-			else
+			if (size != sizeof(value) || value.nr != 2)
 			{
-                        	cs->all.instr += cs->cpu[i].instr;
+				fprintf(stderr, "%s:%d - Error %d reading perf counters\n",
+				        __FILE__, __LINE__, size < 0 ? errno : EIO);
+				continue;
 			}
 
-                	liResult = read(*(fdc+i), &(cs->cpu[i].cycle), sizeof(count_t));
+			enabled = value.time_enabled - events[i].prev.time_enabled;
+			running = value.time_running - events[i].prev.time_running;
 
-			if(liResult < 0)
-			{
-				char lcMessage[64];
+			/* Scale interval deltas before rebuilding cumulative counts. */
+			add_scaled_perf_count(&events[i].instr,
+				value.value[0] - events[i].prev.value[0], enabled, running);
+			add_scaled_perf_count(&events[i].cycle,
+				value.value[1] - events[i].prev.value[1], enabled, running);
+			events[i].prev = value;
 
-				snprintf(lcMessage, sizeof(lcMessage) - 1,
-				          "%s:%d - Error %d reading cycle counters\n",
-				           __FILE__, __LINE__, errno );
-				fprintf(stderr, "%s", lcMessage);
-			}
-			else
-			{
-                        	cs->all.cycle += cs->cpu[i].cycle;
-			}
+			cs->cpu[i].instr = events[i].instr;
+			cs->cpu[i].cycle = events[i].cycle;
+			add_perf_count(&cs->all.instr, cs->cpu[i].instr);
+			add_perf_count(&cs->all.cycle, cs->cpu[i].cycle);
 		}
         }
 }
