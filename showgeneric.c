@@ -256,7 +256,7 @@ generic_samp(time_t curtime, int nsecs,
 ** print the deviation-counters on process level, cgroups level and
 ** system level in text mode
 */
-#define	SORTHASH(x)	((x.ascdesc << 8)|(x.sortcolumn ? x.sortcolumn : x.showresource|0x80))
+#define	SORTHASH(x)	(((unsigned char)(x.ascdesc) << 8)|(x.sortcolumn ? x.sortcolumn : x.showresource|0x80))
 
 static char
 text_samp(time_t curtime, int nsecs,

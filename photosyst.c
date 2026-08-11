@@ -579,10 +579,10 @@ photosyst(struct sstat *si)
 
 		        while ( fgets(linebuf, sizeof(linebuf), fp) != NULL)
                         {
-                                if (memcmp(linebuf, "processor", 9)== EQ)
+                                if (strncmp(linebuf, "processor", 9)== EQ)
 					sscanf(linebuf, "%*s %*s %d", &cpuno);
 
-                                if (memcmp(linebuf, "cpu MHz", 7) == EQ)
+                                if (strncmp(linebuf, "cpu MHz", 7) == EQ)
 				{
                                         if (cpuno >= 0 && cpuno < si->cpu.maxcpu)
 					{
@@ -679,7 +679,7 @@ photosyst(struct sstat *si)
 			}
 
 			// more counters might start with "allocstall"
-			if ( memcmp("allocstall", nam, 10) == EQ)
+			if ( strncmp("allocstall", nam, 10) == EQ)
 			{
 				si->mem.allocstall += cnts[0];
 				continue;
@@ -1788,7 +1788,7 @@ photosyst(struct sstat *si)
 
 	if ( (fp = fopen("self/mountstats", "r")) != NULL)
 	{
-		char 	mountdev[128], fstype[32], label[32];
+		char 	mountdev[128], fstype[32] = "", label[32];
                 count_t	cnt[8];
 
 		i = 0;
@@ -1803,7 +1803,7 @@ photosyst(struct sstat *si)
 				continue;
 			}
 
-			if (memcmp(fstype, "nfs", 3) != 0)
+			if (strncmp(fstype, "nfs", 3) != 0)
 				continue;
 
 			// this is line with NFS client stats

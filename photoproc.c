@@ -621,26 +621,26 @@ procstatus(struct tstat *curtask)
 
 	while (fgets(line, sizeof line, fp))
 	{
-		if (memcmp(line, "Tgid:", 5) ==0)
+		if (strncmp(line, "Tgid:", 5) ==0)
 		{
 			sscanf(line, "Tgid: %d", &(curtask->gen.tgid));
 			continue;
 		}
 
-		if (memcmp(line, "Pid:", 4) ==0)
+		if (strncmp(line, "Pid:", 4) ==0)
 		{
 			sscanf(line, "Pid: %d", &(curtask->gen.pid));
 			continue;
 		}
 
-		if (memcmp(line, "SleepAVG:", 9)==0)
+		if (strncmp(line, "SleepAVG:", 9)==0)
 		{
 			sscanf(line, "SleepAVG: %d%%",
 				&(curtask->cpu.sleepavg));
 			continue;
 		}
 
-		if (memcmp(line, "Uid:", 4)==0)
+		if (strncmp(line, "Uid:", 4)==0)
 		{
 			sscanf(line, "Uid: %d %d %d %d",
 				&(curtask->gen.ruid), &(curtask->gen.euid),
@@ -648,7 +648,7 @@ procstatus(struct tstat *curtask)
 			continue;
 		}
 
-		if (memcmp(line, "Gid:", 4)==0)
+		if (strncmp(line, "Gid:", 4)==0)
 		{
 			sscanf(line, "Gid: %d %d %d %d",
 				&(curtask->gen.rgid), &(curtask->gen.egid),
@@ -656,67 +656,67 @@ procstatus(struct tstat *curtask)
 			continue;
 		}
 
-		if (memcmp(line, "envID:", 6) ==0)
+		if (strncmp(line, "envID:", 6) ==0)
 		{
 			sscanf(line, "envID: %d", &(curtask->gen.ctid));
 			continue;
 		}
 
-		if (memcmp(line, "VPid:", 5) ==0)
+		if (strncmp(line, "VPid:", 5) ==0)
 		{
 			sscanf(line, "VPid: %d", &(curtask->gen.vpid));
 			continue;
 		}
 
-		if (memcmp(line, "Threads:", 8)==0)
+		if (strncmp(line, "Threads:", 8)==0)
 		{
 			sscanf(line, "Threads: %d", &(curtask->gen.nthr));
 			continue;
 		}
 
-		if (memcmp(line, "VmData:", 7)==0)
+		if (strncmp(line, "VmData:", 7)==0)
 		{
 			sscanf(line, "VmData: %lld", &(curtask->mem.vdata));
 			continue;
 		}
 
-		if (memcmp(line, "VmStk:", 6)==0)
+		if (strncmp(line, "VmStk:", 6)==0)
 		{
 			sscanf(line, "VmStk: %lld", &(curtask->mem.vstack));
 			continue;
 		}
 
-		if (memcmp(line, "VmExe:", 6)==0)
+		if (strncmp(line, "VmExe:", 6)==0)
 		{
 			sscanf(line, "VmExe: %lld", &(curtask->mem.vexec));
 			continue;
 		}
 
-		if (memcmp(line, "VmLib:", 6)==0)
+		if (strncmp(line, "VmLib:", 6)==0)
 		{
 			sscanf(line, "VmLib: %lld", &(curtask->mem.vlibs));
 			continue;
 		}
 
-		if (memcmp(line, "VmSwap:", 7)==0)
+		if (strncmp(line, "VmSwap:", 7)==0)
 		{
 			sscanf(line, "VmSwap: %lld", &(curtask->mem.vswap));
 			continue;
 		}
 
-		if (memcmp(line, "VmLck:", 6)==0)
+		if (strncmp(line, "VmLck:", 6)==0)
 		{
 			sscanf(line, "VmLck: %lld", &(curtask->mem.vlock));
 			continue;
 		}
 
-		if (memcmp(line, "voluntary_ctxt_switches:", 24)==0)
+		if (strncmp(line, "voluntary_ctxt_switches:", 24)==0)
 		{
 			sscanf(line, "voluntary_ctxt_switches: %lld", &(curtask->cpu.nvcsw));
 			continue;
 		}
 
-		if (memcmp(line, "nonvoluntary_ctxt_switches:", 27)==0)
+		if (strncmp(line, "nonvoluntary_ctxt_switches:", 27)==0)
 		{
 			sscanf(line, "nonvoluntary_ctxt_switches: %lld", &(curtask->cpu.nivcsw));
 			continue;
@@ -748,7 +748,7 @@ procio(struct tstat *curtask)
 		{
 			while (fgets(line, sizeof line, fp))
 			{
-				if (memcmp(line, IO_READ,
+				if (strncmp(line, IO_READ,
 						sizeof IO_READ -1) == 0)
 				{
 					sscanf(line, "%*s %llu", &dskrsz);
@@ -756,7 +756,7 @@ procio(struct tstat *curtask)
 					continue;
 				}
 
-				if (memcmp(line, IO_WRITE,
+				if (strncmp(line, IO_WRITE,
 						sizeof IO_WRITE -1) == 0)
 				{
 					sscanf(line, "%*s %llu", &dskwsz);
@@ -764,7 +764,7 @@ procio(struct tstat *curtask)
 					continue;
 				}
 
-				if (memcmp(line, IO_CWRITE,
+				if (strncmp(line, IO_CWRITE,
 						sizeof IO_CWRITE -1) == 0)
 				{
 					sscanf(line, "%*s %llu", &dskcwsz);
@@ -989,7 +989,7 @@ procsmaps(struct tstat *curtask)
 
 		while (fgets(line, sizeof line, fp))
 		{
-			if (memcmp(line, "Pss:", 4) != 0)
+			if (strncmp(line, "Pss:", 4) != 0)
 				continue;
 
 			// PSS line found to be accumulated
