@@ -148,7 +148,7 @@ cgroupv2support(void)
 	{
 		while (fgets(line, sizeof line, fp))
 		{
-			if (memcmp(line, "0::", 3) == 0) // equal?
+			if (strncmp(line, "0::", 3) == 0) // equal?
 			{
 				supportflags |= CGROUPV2;
 				break;
@@ -541,14 +541,14 @@ getmetrics(struct cstat *csp)
 	{
 		while (fgets(line, sizeof line, fp) && cnt < 2)
 		{
-			if (memcmp(line, "user_usec ", 10) == 0)
+			if (strncmp(line, "user_usec ", 10) == 0)
 			{
 				sscanf(line, "user_usec %lld", &(csp->cpu.utime));
 				cnt++;
 				continue;
 			}
 
-			if (memcmp(line, "system_usec ", 12) == 0)
+			if (strncmp(line, "system_usec ", 12) == 0)
 			{
 				sscanf(line, "system_usec %lld", &(csp->cpu.stime));
 				cnt++;
@@ -584,7 +584,7 @@ getmetrics(struct cstat *csp)
 	{
 		while (fgets(line, sizeof line, fp) && cnt < 4)
 		{
-			if (memcmp(line, "anon ", 5) == 0)
+			if (strncmp(line, "anon ", 5) == 0)
 			{
 				sscanf(line, "anon %lld", &(csp->mem.anon));
 				csp->mem.anon /= pagesize;
@@ -592,7 +592,7 @@ getmetrics(struct cstat *csp)
 				continue;
 			}
 
-			if (memcmp(line, "file ", 5) == 0)
+			if (strncmp(line, "file ", 5) == 0)
 			{
 				sscanf(line, "file %lld", &(csp->mem.file));
 				csp->mem.file /= pagesize;
@@ -600,7 +600,7 @@ getmetrics(struct cstat *csp)
 				continue;
 			}
 
-			if (memcmp(line, "kernel ", 7) == 0)
+			if (strncmp(line, "kernel ", 7) == 0)
 			{
 				sscanf(line, "kernel %lld", &(csp->mem.kernel));
 				csp->mem.kernel /= pagesize;
@@ -608,7 +608,7 @@ getmetrics(struct cstat *csp)
 				continue;
 			}
 
-			if (memcmp(line, "shmem ", 6) == 0)
+			if (strncmp(line, "shmem ", 6) == 0)
 			{
 				sscanf(line, "shmem %lld", &(csp->mem.shmem));
 				csp->mem.shmem /= pagesize;
