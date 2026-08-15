@@ -756,10 +756,13 @@ getbootlinux(long hertz)
 	char			linebuf[256];
 	unsigned long long	btime = 0;
 
-	if ((fp = fopen("/proc/stat", "r"))) {
-		while (fgets(linebuf, sizeof(linebuf), fp)) {
-			if (strncmp(linebuf, "btime ", 6) == 0) {
-				btime = atoll(linebuf + 6);
+	if ((fp = fopen("/proc/stat", "r")))
+	{
+		while (fgets(linebuf, sizeof(linebuf), fp))
+		{
+			if (strncmp(linebuf, "btime ", 6) == 0)
+			{
+				(void) sscanf(linebuf, "%*s %llu", &btime);
 				break;
 			}
 		}
@@ -780,41 +783,47 @@ getbootlinux(long hertz)
 	unsigned long long	bootjiffies = 0;
 	struct timespec		ts;
 
-	if ((cpid = fork()) == 0) {
+	if ((cpid = fork()) == 0)
+	{
 		/*
 		** child just waiting to be killed by parent
 		*/
 		pause();
-	} else if (cpid > 0) {
-		/*
-		** parent determines start-time (in jiffies since boot) 
-		** of the child and calculates the boottime in jiffies
-		** since 1-1-1970
-		*/
-		(void) clock_gettime(CLOCK_REALTIME, &ts);	// get current
-		bootjiffies = 1LL * ts.tv_sec  * hertz +
-		              1LL * ts.tv_nsec * hertz / 1000000000LL;
-
-		snprintf(tmpbuf, sizeof tmpbuf, "/proc/%d/stat", cpid);
-
-		if ( (fp = fopen(tmpbuf, "r")) != NULL)
+	}
+	else
+	{
+		if (cpid > 0)
 		{
-			if ( fscanf(fp, "%*d (%*[^)]) %*c %*d %*d %*d %*d "
-			                "%*d %*d %*d %*d %*d %*d %*d %*d "
-			                "%*d %*d %*d %*d %*d %*d %lu",
-			                &startticks) == 1)
+			/*
+			** parent determines start-time (in jiffies since boot) 
+			** of the child and calculates the boottime in jiffies
+			** since 1-1-1970
+			*/
+			(void) clock_gettime(CLOCK_REALTIME, &ts);	// get current
+			bootjiffies = 1LL * ts.tv_sec  * hertz +
+			              1LL * ts.tv_nsec * hertz / 1000000000LL;
+
+			snprintf(tmpbuf, sizeof tmpbuf, "/proc/%d/stat", cpid);
+
+			if ( (fp = fopen(tmpbuf, "r")) != NULL)
 			{
-				bootjiffies -= startticks;
+				if ( fscanf(fp, "%*d (%*[^)]) %*c %*d %*d %*d %*d "
+				                "%*d %*d %*d %*d %*d %*d %*d %*d "
+				                "%*d %*d %*d %*d %*d %*d %lu",
+				                &startticks) == 1)
+				{
+					bootjiffies -= startticks;
+				}
+
+				fclose(fp);
 			}
 
-			fclose(fp);
+			/*
+			** kill the child and get rid of the zombie
+			*/
+			kill(cpid, SIGKILL);
+			(void) wait((int *)0);
 		}
-
-		/*
-		** kill the child and get rid of the zombie
-		*/
-		kill(cpid, SIGKILL);
-		(void) wait((int *)0);
 	}
 
 	return bootjiffies;
